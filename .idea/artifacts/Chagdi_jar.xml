@@ -1,0 +1,12 @@
+<component name="ArtifactManager">
+  <artifact name="Chagdi:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Chagdi_jar</output-path>
+    <root id="root">
+      <element id="archive" name="Chagdi.jar">
+        <element id="directory" name="META-INF">
+          <element id="file-copy" path="H:/SmartFoxNew/SmartFoxServer_2X/SFS2X/extensions/chagdi/META-INF/MANIFEST.MF" />
+        </element>
+      </element>
+    </root>
+  </artifact>
+</component>
