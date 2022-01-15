@@ -30,20 +30,20 @@ class Card : Comparable<Card> {
      * If the rank or suit is invalid.
      */
     constructor(rank: Int, suit: Int) {
-        var rank = rank
-        var suit = suit
-        if (rank < 0 || rank > NO_OF_RANKS - 1) {
+        var mRank = rank
+        var mSuit = suit
+        if (mRank < 0 || mRank > NO_OF_RANKS - 1) {
 //			throw new IllegalArgumentException("Invalid rank");
-            println("Invalid rank: $rank")
-            rank = if (rank < 0) 0 else if (rank > NO_OF_RANKS - 1) NO_OF_RANKS - 1 else rank
+            println("Invalid rank: $mRank")
+            mRank = if (mRank < 0) 0 else if (mRank > NO_OF_RANKS - 1) NO_OF_RANKS - 1 else mRank
         }
-        if (suit < 0 || suit > NO_OF_SUITS - 1) {
+        if (mSuit < 0 || mSuit > NO_OF_SUITS - 1) {
 //			throw new IllegalArgumentException("Invalid suit");
-            println("Invalid suit: $suit")
-            suit = if (suit < 0) 0 else if (suit > NO_OF_SUITS - 1) NO_OF_SUITS - 1 else suit
+            println("Invalid suit: $mSuit")
+            mSuit = if (mSuit < 0) 0 else if (mSuit > NO_OF_SUITS - 1) NO_OF_SUITS - 1 else mSuit
         }
-        this.rank = rank
-        this.suit = suit
+        this.rank = mRank
+        this.suit = mSuit
     }
 
     /**
@@ -52,21 +52,21 @@ class Card : Comparable<Card> {
      * The string must consist of a rank character and a suit character, in that
      * order.
      *
-     * @param s
+     * @param cardName
      * The string representation of the card, e.g. "As", "Td", "7h".
      *
      * @throws IllegalArgumentException
      * If the card string is null or of invalid length, or the rank
      * or suit could not be parsed.
      */
-    constructor(s: String?) {
-        var s = s ?: throw IllegalArgumentException("Null string or of invalid length")
-        s = s.trim { it <= ' ' }
-        require(s.length == 2) { "Empty string or invalid length" }
+    constructor(cardName: String?) {
+        var mCardName = cardName ?: throw IllegalArgumentException("Null string or of invalid length")
+        mCardName = mCardName.trim { it <= ' ' }
+        require(mCardName.length == 2) { "Empty string or invalid length" }
 
         // Parse the rank character.
-        val rankSymbol = s.substring(0, 1)
-        val suitSymbol = s[1]
+        val rankSymbol = mCardName.substring(0, 1)
+        val suitSymbol = mCardName[1]
         var rank = -1
         for (i in 0 until NO_OF_RANKS) {
             if (rankSymbol == RANK_SYMBOLS[i]) {
@@ -94,14 +94,14 @@ class Card : Comparable<Card> {
     }
 
     /** {@inheritDoc}  */
-    override fun equals(obj: Any?): Boolean {
-        return obj is Card && obj.hashCode() == hashCode()
+    override fun equals(other: Any?): Boolean {
+        return other is Card && other.hashCode() == hashCode()
     }
 
     /** {@inheritDoc}  */
-    override fun compareTo(card: Card): Int {
+    override fun compareTo(other: Card): Int {
         val thisValue = hashCode()
-        val otherValue = card.hashCode()
+        val otherValue = other.hashCode()
         return if (thisValue < otherValue) {
             -1
         } else if (thisValue > otherValue) {

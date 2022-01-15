@@ -3,11 +3,8 @@ package extension.zone
 
 import com.smartfoxserver.v2.entities.User
 import com.smartfoxserver.v2.entities.data.ISFSObject
-import com.smartfoxserver.v2.entities.data.SFSObject
 import com.smartfoxserver.v2.extensions.BaseClientRequestHandler
-import data.UserRepository
-import exceptions.InsufficientFundsException
-import extension.RoomExtension
+import extension.room.RoomExtension
 
 class RoomHandler : BaseClientRequestHandler() {
 

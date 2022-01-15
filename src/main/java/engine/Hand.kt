@@ -163,6 +163,20 @@ class Hand {
         return dest
     }
 
+
+    fun removeCard(hashCode : String){
+        var removeIndex = -1
+        for (i in 0 until noOfCards) {
+            if (hashCode.hashCode() == cards[i].hashCode()) {
+                removeIndex = i
+                break
+            }
+        }
+        if(removeIndex != -1){
+            cards[removeIndex] = null
+        }
+    }
+
     /**
      * Removes all cards.
      */
@@ -188,6 +202,6 @@ class Hand {
 
     companion object {
         /** The maximum number of cards in a hand.  */
-        private const val MAX_NO_OF_CARDS = 7
+        private const val MAX_NO_OF_CARDS = 8
     }
 }
