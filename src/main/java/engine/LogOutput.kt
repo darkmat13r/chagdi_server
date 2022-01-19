@@ -26,7 +26,7 @@ class LogOutput : SFSExtension() {
 
         fun traceLog(output: String?) {
             //instance().outputString(output);
-            instance()?.trace(ExtensionLogLevel.WARN,output);
+            instance()?.trace(ExtensionLogLevel.WARN,output ?: "Empty log output")
         }
     }
 }
