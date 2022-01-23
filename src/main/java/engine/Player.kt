@@ -10,6 +10,7 @@ class Player(private val name: String, private val username: String,  val client
     var playerState: PlayerStatus = PlayerStatus.NONE
     var hand: Hand = Hand()
     var team: Team? = null
+    var action: Action? = null
     var bet: Int = -1
 
     fun getUsername(): String = username
@@ -28,12 +29,19 @@ class Player(private val name: String, private val username: String,  val client
         return SFSObject().apply {
             putInt("pos", pos)
             putInt("bet", bet)
+            putBool("is_bot", isBot)
             putInt("teamPos", teamPos)
             putUtfString("name", name)
             putUtfString("username", username)
             if (team != null)
                 putUtfString("team", team?.getName())
         }
+    }
+
+
+    sealed class Action{
+        object Idle: Action()
+        data class DrawCard(private val card : Int) : Action()
     }
 
 }

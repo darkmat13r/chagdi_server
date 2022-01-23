@@ -131,6 +131,10 @@ class Deck {
         return card
     }
 
+
+    fun getCard(hashCode : Int) :  Card?{
+        return cards.first { it.hashCode() == hashCode }
+    }
     /** {@inheritDoc}  */
     override fun toString(): String {
         val sb = StringBuilder()

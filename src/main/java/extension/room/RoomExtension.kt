@@ -16,13 +16,15 @@ import engine.*
 import extension.zone.ZoneExtension
 import utils.getRandomString
 import java.util.*
+import kotlin.collections.HashMap
 import kotlin.math.min
 
 class RoomExtension : SFSExtension(), Client {
 
-    private lateinit var table: Table
+    lateinit var table: Table
     private lateinit var roomName: String
-    private val names = arrayListOf("Blabbermouth",
+    private val names = arrayListOf(
+        "Blabbermouth",
         "Hercules",
         "Konversation",
         "Lollipop",
@@ -40,6 +42,8 @@ class RoomExtension : SFSExtension(), Client {
         addRequestHandler("join_team", JoinTeamHandler::class.java)
         addRequestHandler("request_join_room", GameJoinRequestHandler::class.java)
         addRequestHandler("action_bet", ActionBetHandler::class.java)
+        addRequestHandler("action_select_trump", ActionSelectTrumpHandler::class.java)
+        addRequestHandler("action_draw_card", ActionDrawCardHandler::class.java)
 
         addEventHandler(SFSEventType.USER_JOIN_ROOM, JoinRoomHandler::class.java)
         addEventHandler(SFSEventType.USER_LEAVE_ROOM, LeaveHandler::class.java)
@@ -77,14 +81,17 @@ class RoomExtension : SFSExtension(), Client {
     }
 
     fun updatePlayers() {
-        send("update_players", SFSObject().apply {
-            val playerInfos = SFSArray()
-            table.players.forEach {
-                LogOutput.traceLog(it.toSFSObject()?.dump)
-                playerInfos.addSFSObject(it.toSFSObject())
-            }
-            putSFSArray("player_infos", playerInfos)
-        }, parentRoom.userList)
+        try {
+            send("update_players", SFSObject().apply {
+                val playerInfos = SFSArray()
+                table.players.forEach {
+                    playerInfos.addSFSObject(it.toSFSObject())
+                }
+                putSFSArray("player_infos", playerInfos)
+            }, parentRoom.userList)
+        } catch (ex: Exception) {
+            LogOutput.traceLog("================================> error is shere ${ex.message}")
+        }
     }
 
     fun dealCard(card: Card?, player: Player) {
@@ -94,7 +101,8 @@ class RoomExtension : SFSExtension(), Client {
         params.putInt("actor_pos", table.dealerPos)
         params.putUtfString("username", player.getUsername())
         params.putInt("card", card.hashCode())
-        if(!player.isBot){
+        params.putInt("card_pos", player.hand.size() - 1)
+        if (!player.isBot) {
             send("deal_card", params, parentRoom.getUserByName(player.getUsername()))
         }
         params.putInt("card", CARD_BACK_NUM)
@@ -106,7 +114,7 @@ class RoomExtension : SFSExtension(), Client {
     fun join(name: String) {
         val player = Player(name, name, this)
         table.addPlayer(player)
-        if(table.players.size == 2){
+        if (table.players.size == 2) {
             addBots()
         }
         send("join_team", SFSObject(), parentRoom.getUserByName(name))
@@ -116,7 +124,7 @@ class RoomExtension : SFSExtension(), Client {
         for (i in 0 until 2) {
             val rd = Random()
             var newName = names[rd.nextInt(names.size)].lowercase().replace(" ", "_")
-            if (table.getPlayerByUsername(newName)  != null){
+            if (table.getPlayerByUsername(newName) != null) {
                 newName = "${newName}_${1}"
             }
             val botPlayer = Player(newName, newName, BasicBot(this))
@@ -128,7 +136,7 @@ class RoomExtension : SFSExtension(), Client {
         for (i in 0 until 2) {
             val rd = Random()
             var newName = names[rd.nextInt(names.size)].lowercase().replace(" ", "_")
-            if (table.getPlayerByUsername(newName)  != null){
+            if (table.getPlayerByUsername(newName) != null) {
                 newName = "${newName}_${1}"
             }
             val botPlayer = Player(newName, newName, BasicBot(this))
@@ -152,22 +160,49 @@ class RoomExtension : SFSExtension(), Client {
         send("ask_bet", SFSObject().apply {
             putInt("pos", player.pos)
             putInt("min_bet", minTarget)
+            putIntArray("allowed_bets", table.getAllowedBets())
             putUtfString("username", player.getUsername())
         }, parentRoom.getUserByName(player.getUsername()))
     }
 
+    override fun askForTrump(player: Player) {
+        setPlayerActive(player.pos)
+        send("ask_trump", SFSObject().apply {
+            putInt("pos", player.pos)
+            putUtfString("username", player.getUsername())
+        }, parentRoom.getUserByName(player.getUsername()))
+    }
+
+    override fun actionDrawCard(player: Player, boardCards: HashMap<Player, Card>, firstCard: Card?) {
+        //Not required for clients
+    }
+
+    fun actionDrawCard(card: Int, name: String?) {
+        LogOutput.traceLog("====================>>>>>ActionDrawCard ${name}")
+        val player = table.getPlayerByUsername(name)
+        if (player?.pos == table.actorPos) {
+            table.cardDrawn(card, name)
+            updatePlayers()
+            send("action_card_drawn", SFSObject().apply {
+                putInt("card", card)
+                putInt("pos", table.getPlayerByUsername(name ?: "")?.pos ?: 0)
+                putInt("place_at", table.boardCards.size - 1)
+            }, getOtherUsers(table.getPlayerByUsername(name)))
+        }
+    }
+
     private fun getMinBet(player: Player): Int {
-        val getMaxTarget = table.players.maxOf { it.bet ?: -1 }
+        val maxBetPlaced = table.players.maxOf { it.bet ?: -1 }
         var nextPlayerPos = table.dealerPos + 1
         if (nextPlayerPos >= Table.MAX_PLAYERS) {
             nextPlayerPos = 0
         }
-        var minTarget = Table.MIN_BET_TARGET_FIRST_PLAYER
+        var minTarget = Table.allowedBets.minOf { it }
         if (player.pos != nextPlayerPos) {
-            minTarget = Table.MIN_BET_TARGET_OTHER
+            minTarget = Table.allowedBets.maxOf { it }
         }
-        if (getMaxTarget == -1) {
-            minTarget = getMaxTarget
+        if (maxBetPlaced == -1) {
+            minTarget = maxBetPlaced
         }
         return min(0, minTarget)
     }
@@ -175,16 +210,15 @@ class RoomExtension : SFSExtension(), Client {
 
     fun actionBet(bet: Int, name: String) {
         table.getPlayerByUsername(name)?.apply {
-            val minBet = getMinBet(this)
-            LogOutput.traceLog("No Player found with ${minBet} ${bet} ${bet in minBet until 17}")
-            if(bet in minBet until 17){
+            LogOutput.traceLog("No Player found with ${table.getAllowedBets()} ${bet}")
+            if (table.getAllowedBets().contains(bet)) {
                 this.bet = bet
-            }else{
+            } else {
                 askToBet(this)
                 error("Not allow to bet this amount", name)
             }
-          updatePlayers()
-        }?:run{
+            updatePlayers()
+        } ?: run {
             LogOutput.traceLog("No Player found with ${name} ${bet}")
         }
     }
@@ -193,6 +227,59 @@ class RoomExtension : SFSExtension(), Client {
         send("set_actor", SFSObject().apply {
             putInt("pos", actorPos)
         }, parentRoom.userList)
+    }
+
+
+    fun actionSetTrump(trump: Int, name: String?) {
+        table.trump = trump
+        table.primaryTeam = table.getPlayerByUsername(name ?: "")?.team
+        updatePlayers()
+        send("action_set_trump", SFSObject().apply {
+            putInt("trump", trump)
+        }, parentRoom.userList)
+    }
+
+
+    fun wonHand(topPlayer: Player?, hand: WonHand) {
+        topPlayer?.let {
+            send("won", SFSObject().apply {
+                putUtfString("team", topPlayer.team?.getName() ?: "")
+                putIntArray("hand", hand.getCardsIds())
+            }, parentRoom.userList)
+        }
+    }
+
+    fun updateCards(player: Player) {
+        val enabledCards = arrayListOf<Int>()
+        val firstCard = table.boardCards.values.firstOrNull()
+        val firstCardSuit = firstCard?.suit
+        val containsFirstCardSuit = if (firstCardSuit == null) false else player.hand.containsSuit(firstCardSuit)
+        player.hand.getCards().forEach {
+            LogOutput.traceLog(
+                "UdpateCards ${player.getUsername()} first ${firstCard?.toDescriptionString()} ${it?.toDescriptionString()} - ${
+                    player.hand.containsSuit(
+                        firstCardSuit ?: -1
+                    )
+                }"
+            )
+            if (it != null) {
+                if (firstCardSuit == null) {
+                    enabledCards.add(it.hashCode())
+                } else if (firstCardSuit == it.suit) {
+                    enabledCards.add(it.hashCode())
+                } else if (!player.hand.containsSuit(firstCardSuit)) {
+                    enabledCards.add(it.hashCode())
+                }
+            }
+        }
+
+        if (!player.isBot) {
+            send("update_cards", SFSObject().apply {
+                putIntArray("cards", enabledCards)
+                putInt("pos", player.pos)
+            }, parentRoom.getUserByName(player.getUsername()))
+        }
+
     }
 
     companion object {

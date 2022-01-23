@@ -50,5 +50,9 @@ class Team(private val name: String) {
         }
     }
 
+    fun addHand(hand: WonHand) {
+        won.add(hand)
+    }
+
 
 }

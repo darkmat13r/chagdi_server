@@ -176,7 +176,18 @@ class Hand {
             cards[removeIndex] = null
         }
     }
-
+    fun removeCard(hashCode : Int){
+        var removeIndex = -1
+        for (i in 0 until noOfCards) {
+            if (hashCode == cards[i].hashCode()) {
+                removeIndex = i
+                break
+            }
+        }
+        if(removeIndex != -1){
+            cards[removeIndex] = null
+        }
+    }
     /**
      * Removes all cards.
      */
@@ -198,6 +209,16 @@ class Hand {
             }
         }
         return sb.toString()
+    }
+
+    fun containsSuit(suit: Int) : Boolean{
+        for (i in 0 until noOfCards) {
+            LogOutput.traceLog("ContainsSui ${suit} vs ${cards[i]?.suit}")
+            if(cards[i]?.suit == suit){
+                return true
+            }
+        }
+        return false
     }
 
     companion object {
