@@ -173,7 +173,7 @@ class RoomExtension : SFSExtension(), Client {
         }, parentRoom.getUserByName(player.getUsername()))
     }
 
-    override fun actionDrawCard(player: Player, boardCards: HashMap<Player, Card>, firstCard: Card?) {
+    override fun actionDrawCard(player: Player, boardCards: HashMap<Int, Card>, firstCard: Card?) {
         //Not required for clients
     }
 
@@ -181,7 +181,7 @@ class RoomExtension : SFSExtension(), Client {
         LogOutput.traceLog("====================>>>>>ActionDrawCard ${name}")
         val player = table.getPlayerByUsername(name)
         if (player?.pos == table.actorPos) {
-            table.cardDrawn(card, name)
+            table.cardDrawn(card, player.pos)
             updatePlayers()
             send("action_card_drawn", SFSObject().apply {
                 putInt("card", card)
@@ -245,6 +245,7 @@ class RoomExtension : SFSExtension(), Client {
             send("won", SFSObject().apply {
                 putUtfString("team", topPlayer.team?.getName() ?: "")
                 putIntArray("hand", hand.getCardsIds())
+                putInt("count", topPlayer.team?.getWonCount()  ?:  0)
             }, parentRoom.userList)
         }
     }
@@ -282,13 +283,18 @@ class RoomExtension : SFSExtension(), Client {
 
     }
 
+    fun reset() {
+        send("reset", SFSObject(), parentRoom.userList)
+    }
+
+
     companion object {
         private const val CARD_BACK_NUM = 52
         fun autoDeleteRooms(zone: Zone) {
             ZoneExtension.mutex.lock()
             try {
                 zone.roomList?.forEach {
-                    if (it.userList.isEmpty()) {
+                    if (it.isDynamic && it.userList.isEmpty()) {
                         (zone.extension as BaseSFSExtension).api.removeRoom(it)
                     }
                 }

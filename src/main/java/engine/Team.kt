@@ -40,6 +40,8 @@ class Team(private val name: String) {
         return false
     }
 
+    fun getWonCount() = won.size
+
     fun addPlayerAt(player: Player, pos: Int) {
         if (pos < MAX_PLAYERS) {
             removeIfAlreadyJoined(player)
@@ -52,6 +54,10 @@ class Team(private val name: String) {
 
     fun addHand(hand: WonHand) {
         won.add(hand)
+    }
+
+    fun reset() {
+        won.clear()
     }
 
 

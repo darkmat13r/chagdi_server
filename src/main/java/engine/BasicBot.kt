@@ -31,7 +31,7 @@ class BasicBot(private val ext: RoomExtension) : Client {
         ext.actionSetTrump(Card.SPADES, player.getUsername())
     }
 
-    override fun actionDrawCard(player: Player, boardCards: HashMap<Player, Card>, firstCard: Card?) {
+    override fun actionDrawCard(player: Player, boardCards: HashMap<Int, Card>, firstCard: Card?) {
         //TODO improve bot
         var drawCard: Card? = null
         if (firstCard?.suit != null && player.hand.containsSuit(firstCard.suit)) {

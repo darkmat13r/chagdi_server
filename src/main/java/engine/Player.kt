@@ -5,6 +5,7 @@ import com.smartfoxserver.v2.entities.data.SFSObject
 
 class Player(private val name: String, private val username: String,  val client: Client) {
     var pos: Int = -1
+    var points: Int = 0
     var teamPos: Int = -1
     var isBot: Boolean = false
     var playerState: PlayerStatus = PlayerStatus.NONE
@@ -19,6 +20,8 @@ class Player(private val name: String, private val username: String,  val client
     fun resetHand() {
         bet = -1
         hand.removeAllCards()
+        team?.reset()
+        playerState = PlayerStatus.NONE
     }
 
     fun addCard(card: Card?) {
@@ -30,6 +33,7 @@ class Player(private val name: String, private val username: String,  val client
             putInt("pos", pos)
             putInt("bet", bet)
             putBool("is_bot", isBot)
+            putInt("points", points)
             putInt("teamPos", teamPos)
             putUtfString("name", name)
             putUtfString("username", username)

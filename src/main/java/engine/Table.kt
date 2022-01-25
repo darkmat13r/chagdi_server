@@ -2,6 +2,7 @@ package engine
 
 import extension.room.RoomExtension
 import java.util.*
+import kotlin.math.abs
 
 class Table(private val gameExt: RoomExtension) {
     companion object {
@@ -19,13 +20,14 @@ class Table(private val gameExt: RoomExtension) {
     private var maxBet: Int = 0
     val players = arrayListOf<Player>()
     val deck = Deck()
-    val boardCards = hashMapOf<Player, Card>()
+    val boardCards = hashMapOf<Int, Card>()
     var team1 = Team("team_1")
     var team2 = Team("team_2")
     var trump: Int = -1
     var primaryTeam: Team? = null
     var dealerPos: Int = -1
     var actorPos: Int = -1
+    var maxBetPlayerPos: Int = -1
     var isRunning: Boolean = false
 
     private var timer: Timer? = null
@@ -45,22 +47,41 @@ class Table(private val gameExt: RoomExtension) {
         state = State.STARTED
         isRunning = true
         dealerPos = -1
-        actorPos = -1
-        boardCards.clear()
         whereis()
         LogOutput.traceLog("Game is running")
-        resetHand()
         rotateDealer()
         while (true) {
+            resetHand()
             rotateActor()
             dealCards()
             chooseBet()
             chooseTrump()
-
             startGame()
-
+            evaluateResult()
             RoomExtension.autoDeleteRooms(gameExt.parentZone)
         }
+    }
+
+    private fun evaluateResult() {
+        val player = players[maxBetPlayerPos]
+        val dealer = players[dealerPos]
+        if ((player.team?.getWonCount() ?: 0) >= player.bet) {
+            dealer.points += player.bet
+        } else {
+            dealer.points -= player.bet
+        }
+        if (dealer.points < 0) {
+            val points = dealer.points
+            rotateDealer()
+            players[dealerPos].points = abs(points)
+            player.points = 0
+        }else if(dealer.points >= 48){
+            dealerPos +=  1
+            rotateDealer()
+            dealer.points = 0
+        }
+
+        gameExt.updatePlayers()
     }
 
     private fun startGame() {
@@ -68,55 +89,52 @@ class Table(private val gameExt: RoomExtension) {
 
         while (round < 8) {
             LogOutput.traceLog("====================>>>>>Start Game  ${round}")
-            for (i in 0 until players.size){
+            for (i in 0 until players.size) {
                 LogOutput.traceLog("====================>>>>>Aciton Required for ${players[actorPos].toSFSObject()?.dump}")
                 gameExt.setPlayerActive(actorPos)
                 gameExt.updateCards(players[actorPos])
-                if(players[actorPos].isBot){
-                    var firstCard : Card? = null
-                    if(boardCards.isNotEmpty()){
+                if (players[actorPos].isBot) {
+                    var firstCard: Card? = null
+                    if (boardCards.isNotEmpty()) {
                         firstCard = boardCards.values.first()
                     }
                     delayTimer(0.6f)
                     players[actorPos].client.actionDrawCard(players[actorPos], boardCards, firstCard)
                 }
-                while(players[actorPos].action  !is Player.Action.DrawCard){
+                while (players[actorPos].action !is Player.Action.DrawCard) {
                     //Wait for player action
                     delayTimer(0.1f)
                     // LogOutput.traceLog("====================>>>>>Watiting for player to draw card ${players[actorPos].toSFSObject()?.dump}")
                 }
                 LogOutput.traceLog("====================>>>>>Aciton Required End Rotate for ${players[actorPos].toSFSObject()?.dump} ${players[actorPos].action}")
                 rotateActor()
-               // gameExt.setPlayerActive(actorPos)
+                // gameExt.setPlayerActive(actorPos)
+            }
+            players.forEach {
+                it.action = Player.Action.Idle
             }
             delayTimer(3f)
             evaluateHand()
             boardCards.clear()
-            players.forEach {
-                it.action = Player.Action.Idle
-            }
             gameExt.updatePlayers()
-            delayTimer(2f)
             round++
         }
     }
 
     private fun evaluateHand() {
-
-
         val firstCard: Card = boardCards.values.first()
-        val firstPlayer: Player = boardCards.keys.first()
+        val firstPlayer: Player = players[boardCards.keys.first()]
         var topCard: Card = firstCard
         var topPlayer: Player = firstPlayer
-        val hand =  WonHand()
+        val hand = WonHand()
 
         boardCards.forEach { player, card ->
-            if(card.suit == trump){
+            if (card.suit == trump) {
                 topCard = card
-                topPlayer = player
-            }else if(card.suit == topCard.suit && card.rank > topCard.rank){
+                topPlayer = players[player]
+            } else if (card.suit == topCard.suit && card.rank > topCard.rank) {
                 topCard = card
-                topPlayer = player
+                topPlayer = players[player]
             }
         }
 
@@ -147,12 +165,13 @@ class Table(private val gameExt: RoomExtension) {
         players.forEach {
             if (it.bet > maxBet) {
                 maxBet = it.bet
-                actorPos = it.pos
+                maxBetPlayerPos = it.pos
             }
         }
+        actorPos = maxBetPlayerPos
         players[actorPos].client.askForTrump(players[actorPos])
         LogOutput.traceLog("============================> Waiting for trump game ${players[actorPos].toSFSObject()?.dump}=======================")
-        while (trump == -1){
+        while (trump == -1) {
             //Wait while user selects trump
             LogOutput.traceLog("============================> Waiting for trump game ${trump}=======================")
         }
@@ -221,10 +240,11 @@ class Table(private val gameExt: RoomExtension) {
 
     private fun resetHand() {
         actorPos = -1
-        dealerPos = -1
+        boardCards.clear()
         players.forEach {
             it.resetHand()
         }
+        gameExt.reset()
     }
 
     private fun delayTimer(_t: Float) {
@@ -308,13 +328,14 @@ class Table(private val gameExt: RoomExtension) {
         }
     }
 
-    fun cardDrawn(cardHashCode: Int, name: String?) {
+    fun cardDrawn(cardHashCode: Int, pos: Int) {
         deck.getCard(cardHashCode)?.let { card ->
-            getPlayerByUsername(name ?: "")?.let {
-                boardCards[it] = card
+            players[pos].let {
+                boardCards[pos] = card
                 it.action = Player.Action.DrawCard(card.hashCode())
                 it.hand.removeCard(cardHashCode)
             }
+            LogOutput.traceLog("BoardsCards ${boardCards.maxOf { it.value.toDescriptionString() + " - " + players[it.key] }}")
         }
     }
 }
