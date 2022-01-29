@@ -66,12 +66,9 @@ class RoomExtension : SFSExtension(), Client {
             }, parentZone.userList.map { it!! })
     }
 
-    fun joinTeam(name: String, team: Int) {
-        table.joinTeam(name, team)
+    fun joinTeam(name: String, pos: Int) {
+        table.joinTeam(name, pos)
 
-        if (table.players.size == Table.MAX_PLAYERS && !table.isRunning) {
-            table.run()
-        }
     }
 
     fun error(error: String, playerToNotify: String) {
@@ -114,10 +111,14 @@ class RoomExtension : SFSExtension(), Client {
     fun join(name: String) {
         val player = Player(name, name, this)
         table.addPlayer(player)
-        if (table.players.size == 2) {
+       /* if (table.players.size == 2) {
             addBots()
-        }
+        }*/
         send("join_team", SFSObject(), parentRoom.getUserByName(name))
+        if (table.players.size > 0 && !table.isRunning) {
+
+            table.run()
+        }
     }
 
     private fun addBots() {
@@ -210,7 +211,6 @@ class RoomExtension : SFSExtension(), Client {
 
     fun actionBet(bet: Int, name: String) {
         table.getPlayerByUsername(name)?.apply {
-            LogOutput.traceLog("No Player found with ${table.getAllowedBets()} ${bet}")
             if (table.getAllowedBets().contains(bet)) {
                 this.bet = bet
             } else {
@@ -330,12 +330,13 @@ class RoomExtension : SFSExtension(), Client {
             val groupId = "chagdi"
             val roomSettings = CreateRoomSettings().apply {
                 isGame = true
-                name = "${groupId}_${roomId}}"
+              //  name = "$roomId"
+                name = "asdasd"
                 this.groupId = groupId
                 isDynamic = true
                 maxUsers = 6
                 val roomVariables = arrayListOf<RoomVariable>()
-                roomVariables.add(SFSRoomVariable("group", roomId))
+                roomVariables.add(SFSRoomVariable("group", groupId))
                 autoRemoveMode = SFSRoomRemoveMode.WHEN_EMPTY
                 setRoomVariables(roomVariables.toList())
                 extension = CreateRoomSettings.RoomExtensionSettings(groupId, RoomExtension::class.java.name)

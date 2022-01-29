@@ -1,5 +1,6 @@
 package engine
 
+import com.smartfoxserver.v2.entities.data.SFSObject
 import extension.room.RoomExtension
 import java.util.*
 import kotlin.math.abs
@@ -27,6 +28,7 @@ class Table(private val gameExt: RoomExtension) {
     var primaryTeam: Team? = null
     var dealerPos: Int = -1
     var actorPos: Int = -1
+    var firstPlayerPos: Int = -1
     var maxBetPlayerPos: Int = -1
     var isRunning: Boolean = false
 
@@ -50,7 +52,9 @@ class Table(private val gameExt: RoomExtension) {
         whereis()
         LogOutput.traceLog("Game is running")
         rotateDealer()
+
         while (true) {
+            joinTeamWait()
             resetHand()
             rotateActor()
             dealCards()
@@ -60,6 +64,14 @@ class Table(private val gameExt: RoomExtension) {
             evaluateResult()
             RoomExtension.autoDeleteRooms(gameExt.parentZone)
         }
+    }
+
+    private fun joinTeamWait() {
+        while(players.filter { it.pos >=0}.size != MAX_PLAYERS){
+            gameExt.updatePlayers()
+            delayTimer(0.1f)
+        }
+        gameExt.send("start_game", SFSObject(), gameExt.parentRoom.userList)
     }
 
     private fun evaluateResult() {
@@ -75,8 +87,8 @@ class Table(private val gameExt: RoomExtension) {
             rotateDealer()
             players[dealerPos].points = abs(points)
             player.points = 0
-        }else if(dealer.points >= 48){
-            dealerPos +=  1
+        } else if (dealer.points >= 48) {
+            dealerPos += 1
             rotateDealer()
             dealer.points = 0
         }
@@ -130,33 +142,18 @@ class Table(private val gameExt: RoomExtension) {
 
         boardCards.forEach { player, card ->
             if (card.suit == trump) {
-                topCard = card
-                topPlayer = players[player]
-            } else if (card.suit == topCard.suit && card.rank > topCard.rank) {
+                if (topCard.suit != trump || card.rank > topCard.rank) {
+                    topCard = card
+                    topPlayer = players[player]
+                }
+            } else if (card.suit == firstCard.suit && card.rank > topCard.rank) {
                 topCard = card
                 topPlayer = players[player]
             }
         }
 
-
-        /*boardCards.forEach { player, card ->
-            if (firstCard != null) {
-                topCard = card
-                firstCard = card
-                topPlayer = player
-                firstPlayer = player
-            } else {
-                if ((firstCard?.suit == card.suit && (topCard?.rank
-                        ?: 0) > card.rank) || (topCard?.suit != card.suit && card.suit == trump)
-                ) {
-                    topCard = card
-                    topPlayer =  player
-                }
-            }
-            hand.addCard(card)
-        }*/
-        actorPos = topPlayer?.pos ?: 0
-        topPlayer?.team?.addHand(hand)
+        actorPos = topPlayer.pos ?: 0
+        topPlayer.team?.addHand(hand)
         gameExt.wonHand(topPlayer, hand)
 
     }
@@ -200,19 +197,28 @@ class Table(private val gameExt: RoomExtension) {
         var playersToChoose = MAX_PLAYERS
         while (playersToChoose >= 0) {
             rotateActor()
+            if (firstPlayerPos == -1) {
+                firstPlayerPos = actorPos
+            }
             players[actorPos].client.askToBet(players[actorPos])
+            LogOutput.traceLog("============================= Ask Bet ${actorPos} player to choose ${playersToChoose}")
             while (!isValidBet()) {
                 delayTimer(0.1f)
+                LogOutput.traceLog("============================= check Bet ${actorPos} player to choose ${players[actorPos].toSFSObject()?.dump}")
             }
             gameExt.updatePlayers()
             playersToChoose--
         }
         val maxBet = players.maxOf { it.bet }
-        if (maxBet <= 0) {
+        LogOutput.traceLog("============================= ${maxBet}")
+        gameExt.updatePlayers()
+        if (maxBet == 0) {
             state = State.FINAL_BETTING
-            rotateActor()
+            actorPos = firstPlayerPos
             players[actorPos].client.askToBet(players[actorPos])
-            while (!isValidBet()) {
+            LogOutput.traceLog("============================= current bet ${players[actorPos].bet}")
+            while (players[actorPos].bet <= 0) {
+                LogOutput.traceLog("============================= waiting for bet ${players[actorPos].bet}")
                 delayTimer(0.1f)
             }
         }
@@ -240,6 +246,7 @@ class Table(private val gameExt: RoomExtension) {
 
     private fun resetHand() {
         actorPos = -1
+        firstPlayerPos = -1
         boardCards.clear()
         players.forEach {
             it.resetHand()
@@ -279,19 +286,38 @@ class Table(private val gameExt: RoomExtension) {
         return players.firstOrNull { it.getUsername() == name }
     }
 
-    fun joinTeam(username: String, team: Int, pos: Int = 0) {
+    fun joinTeam(username: String,  pos: Int = 0) {
         getPlayerByUsername(username)?.let { player ->
             LogOutput.traceLog("Join New Player ${player.getName()}")
-            if (team == 1) {
-                val index = team1.addPlayer(player)
-                player.pos = index * 1 + index
+            val isFirstTeamPos = arrayOf(0,2,4).contains(pos)
+            val oldTeamPos = player.pos
+            val checkPos = players.filter { it.pos == pos }.isEmpty()
+            if(checkPos){
+                player.team?.removeIfAlreadyJoined(player)
+                if(isFirstTeamPos){
+                    team1.addPlayer(player)
+                    player.team = team1
+                }else{
+                    team2.addPlayer(player)
+                    player.team = team2
+                }
+                player.pos =  pos
+            }
+            gameExt.send("team_joined", SFSObject().apply {
+                putInt("old_pos", oldTeamPos)
+                putInt("pos", pos)
+                putSFSObject("player", player.toSFSObject())
+            }, gameExt.parentRoom.userList)
+           /* if (isFirstTeamPos) {
+                team1.addPlayer(player)
+                player.pos =pos
                 player.team = team1
             } else {
-                val index = team2.addPlayer(player)
-                player.pos = index * 1 + index + 1
+                team2.addPlayer(player)
+                player.pos =pos
                 player.team = team2
-            }
-            LogOutput.traceLog("Join New Player at ${player.team}")
+            }*/
+            LogOutput.traceLog("Join New Player at ${player.pos}")
             players.sortBy { it.pos }
             if (player.pos > -1) {
                 gameExt.updatePlayers()
@@ -321,11 +347,18 @@ class Table(private val gameExt: RoomExtension) {
     }
 
     fun getAllowedBets(): List<Int> {
-        return allowedBets.filter { players.maxOf { it.bet } < it }.toMutableList().apply {
-            if (state != State.FINAL_BETTING) {
-                add(0)
-            }
+        val bets = arrayListOf<Int>().apply {
+            addAll(allowedBets.filter { players.maxOf { it.bet } < it }
+                .toMutableList().apply {
+                    if (state != State.FINAL_BETTING) {
+                        add(0)
+                    }
+                })
         }
+        if(actorPos != firstPlayerPos){
+            bets.remove(5)
+        }
+        return bets
     }
 
     fun cardDrawn(cardHashCode: Int, pos: Int) {
