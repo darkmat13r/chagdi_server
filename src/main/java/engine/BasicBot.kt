@@ -34,6 +34,17 @@ class BasicBot(private val ext: RoomExtension) : Client {
     override fun actionDrawCard(player: Player, boardCards: HashMap<Int, Card>, firstCard: Card?) {
         //TODO improve bot
         var drawCard: Card? = null
+
+        //Condition 1 : When first chance is not for bot
+        ////
+        //// First card is not trump : Check if teammate played card other than first card drawn and not trump,
+        //// and opponent didn't played trump - Play bigger card or play trump or play smaller card if dont have card of above type
+        ////
+        //// FIrst card is trump : Check whoes team has highest trump: play highest, play lowest or play the least count card
+        ////
+        ////
+
+
         if (firstCard?.suit != null && player.hand.containsSuit(firstCard.suit)) {
             player.hand.getCards().filter { it?.suit == firstCard.suit }.sortedBy { it?.rank }
                 .firstOrNull { it?.suit == firstCard.suit }?.let {

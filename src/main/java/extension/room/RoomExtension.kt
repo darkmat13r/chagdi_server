@@ -287,6 +287,12 @@ class RoomExtension : SFSExtension(), Client {
         send("reset", SFSObject(), parentRoom.userList)
     }
 
+    fun waitForNextGame() {
+        send("next_game_wait", SFSObject().apply {
+            putFloat("time",  Table.NEXT_GAME_WAIT)
+        }, parentRoom.userList)
+    }
+
 
     companion object {
         private const val CARD_BACK_NUM = 52

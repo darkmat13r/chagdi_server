@@ -5,17 +5,17 @@ import extension.room.RoomExtension
 import java.util.*
 import kotlin.math.abs
 
+
 class Table(private val gameExt: RoomExtension) {
     companion object {
+        const val NEXT_GAME_WAIT: Float = 10f
         const val MAX_PLAYERS = 6
-        const val WAITING_TIME = 30f
-        const val MIN_BET_TARGET_FIRST_PLAYER = 5
-        const val MIN_BET_TARGET_OTHER = 6
-        val allowedBets = arrayOf(5, 6, 7, 8, 48)
+        private const val MAX_HAND = 8
+        val allowedBets = arrayOf(5, 6, 7, MAX_HAND, 48)
     }
 
     enum class State {
-        NONE, STARTED, BETTING, FINAL_BETTING, RUNNING
+        NONE, STARTED, BETTING, FINAL_BETTING, RUNNING, SHOW_RESULT
     }
 
     private var maxBet: Int = 0
@@ -52,8 +52,8 @@ class Table(private val gameExt: RoomExtension) {
         whereis()
         LogOutput.traceLog("Game is running")
         rotateDealer()
-
         while (true) {
+            state = State.RUNNING
             joinTeamWait()
             resetHand()
             rotateActor()
@@ -67,9 +67,12 @@ class Table(private val gameExt: RoomExtension) {
     }
 
     private fun joinTeamWait() {
-        while(players.filter { it.pos >=0}.size != MAX_PLAYERS){
-            gameExt.updatePlayers()
-            delayTimer(0.1f)
+        var playerJoinedCount = players.size
+        while (players.filter { it.pos >= 0 }.size != MAX_PLAYERS) {
+            if (playerJoinedCount != players.size) {
+                gameExt.updatePlayers()
+                playerJoinedCount = players.size
+            }
         }
         gameExt.send("start_game", SFSObject(), gameExt.parentRoom.userList)
     }
@@ -92,14 +95,14 @@ class Table(private val gameExt: RoomExtension) {
             rotateDealer()
             dealer.points = 0
         }
-
         gameExt.updatePlayers()
+        gameExt.waitForNextGame()
+        delayTimer(NEXT_GAME_WAIT)
     }
 
     private fun startGame() {
         var round = 0
-
-        while (round < 8) {
+        while (round < MAX_HAND && state == State.RUNNING) {
             LogOutput.traceLog("====================>>>>>Start Game  ${round}")
             for (i in 0 until players.size) {
                 LogOutput.traceLog("====================>>>>>Aciton Required for ${players[actorPos].toSFSObject()?.dump}")
@@ -151,11 +154,21 @@ class Table(private val gameExt: RoomExtension) {
                 topPlayer = players[player]
             }
         }
-
         actorPos = topPlayer.pos ?: 0
         topPlayer.team?.addHand(hand)
         gameExt.wonHand(topPlayer, hand)
-
+        //Check if other team manage to won required hand
+        if (topPlayer.team != players[maxBetPlayerPos].team) {
+            val wonCount = topPlayer.team?.getWonCount() ?: 0
+            if (wonCount >= MAX_HAND - maxBet) {
+                state = State.SHOW_RESULT
+            }
+        } else {
+            val wonCount = topPlayer.team?.getWonCount() ?: 0
+            if (wonCount >= maxBet) {
+                state = State.SHOW_RESULT
+            }
+        }
     }
 
     private fun chooseTrump() {
@@ -286,37 +299,37 @@ class Table(private val gameExt: RoomExtension) {
         return players.firstOrNull { it.getUsername() == name }
     }
 
-    fun joinTeam(username: String,  pos: Int = 0) {
+    fun joinTeam(username: String, pos: Int = 0) {
         getPlayerByUsername(username)?.let { player ->
             LogOutput.traceLog("Join New Player ${player.getName()}")
-            val isFirstTeamPos = arrayOf(0,2,4).contains(pos)
+            val isFirstTeamPos = arrayOf(0, 2, 4).contains(pos)
             val oldTeamPos = player.pos
             val checkPos = players.filter { it.pos == pos }.isEmpty()
-            if(checkPos){
+            if (checkPos) {
                 player.team?.removeIfAlreadyJoined(player)
-                if(isFirstTeamPos){
+                if (isFirstTeamPos) {
                     team1.addPlayer(player)
                     player.team = team1
-                }else{
+                } else {
                     team2.addPlayer(player)
                     player.team = team2
                 }
-                player.pos =  pos
+                player.pos = pos
             }
             gameExt.send("team_joined", SFSObject().apply {
                 putInt("old_pos", oldTeamPos)
                 putInt("pos", pos)
                 putSFSObject("player", player.toSFSObject())
             }, gameExt.parentRoom.userList)
-           /* if (isFirstTeamPos) {
-                team1.addPlayer(player)
-                player.pos =pos
-                player.team = team1
-            } else {
-                team2.addPlayer(player)
-                player.pos =pos
-                player.team = team2
-            }*/
+            /* if (isFirstTeamPos) {
+                 team1.addPlayer(player)
+                 player.pos =pos
+                 player.team = team1
+             } else {
+                 team2.addPlayer(player)
+                 player.pos =pos
+                 player.team = team2
+             }*/
             LogOutput.traceLog("Join New Player at ${player.pos}")
             players.sortBy { it.pos }
             if (player.pos > -1) {
@@ -349,13 +362,13 @@ class Table(private val gameExt: RoomExtension) {
     fun getAllowedBets(): List<Int> {
         val bets = arrayListOf<Int>().apply {
             addAll(allowedBets.filter { players.maxOf { it.bet } < it }
-                .toMutableList().apply {
-                    if (state != State.FINAL_BETTING) {
-                        add(0)
-                    }
-                })
+                .toMutableList())
+        }.apply {
+            if (state != State.FINAL_BETTING) {
+                add(0)
+            }
         }
-        if(actorPos != firstPlayerPos){
+        if (actorPos != firstPlayerPos) {
             bets.remove(5)
         }
         return bets
